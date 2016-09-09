@@ -1,25 +1,5 @@
-web3.eth.getTransactionReceiptMined = function (txnHash, interval) {
-  var transactionReceiptAsync;
-  interval = interval ? interval : 500;
-  transactionReceiptAsync = function(txnHash, resolve, reject) {
-    try {
-      var receipt = web3.eth.getTransactionReceipt(txnHash);
-      if (receipt == null) {
-        setTimeout(function () {
-          transactionReceiptAsync(txnHash, resolve, reject);
-        }, interval);
-      } else {
-        resolve(receipt);
-      }
-    } catch(e) {
-      reject(e);
-    }
-  };
-
-  return new Promise(function (resolve, reject) {
-      transactionReceiptAsync(txnHash, resolve, reject);
-  });
-};
+extensions = require("./extensions.js");
+extensions.init(web3, assert);
 
 contract('DirectPay', function(accounts) {
 
@@ -27,7 +7,10 @@ contract('DirectPay', function(accounts) {
     var directPay = DirectPay.deployed();
     var account1Balance = web3.eth.getBalance(accounts[1]);
 
-    assert.equal(web3.fromWei(web3.eth.getBalance(directPay.address)).valueOf(), 10, "should start with 10 Ether");
+    assert.equal(
+      web3.fromWei(web3.eth.getBalance(directPay.address)).valueOf(),
+      10,
+      "should start with 10 Ether");
 
     return directPay.calls()
       .then(function (calls) {
@@ -43,10 +26,16 @@ contract('DirectPay', function(accounts) {
       })
       .then(function (receipt) {
         assert.isBelow(receipt.gasUsed, 3000000, "should not use all gas");
-        assert.equal(web3.fromWei(web3.eth.getBalance(directPay.address)).valueOf(), 9, "should be down to 9 Ether");
+        assert.equal(
+          web3.fromWei(web3.eth.getBalance(directPay.address)).valueOf(),
+          9,
+          "should be down to 9 Ether");
         var newAccout1Balance = web3.eth.getBalance(accounts[1]); 
         // This fails in TestRPC
-        assert.equal(web3.fromWei(newAccout1Balance - account1Balance).valueOf(), 1, "should have new balance");
+        assert.equal(
+          web3.fromWei(newAccout1Balance - account1Balance).valueOf(),
+          1,
+          "should have new balance");
         return directPay.calls();
       })
       .then(function (calls) {
@@ -106,6 +95,19 @@ contract('DirectPay', function(accounts) {
       .then(function (calls) {
         assert.equal(calls.valueOf(), 3, "should have had 3 calls");
       });
+  });
+
+  it("should not be possible to send more than what it has", function () {
+
+    var directPay = DirectPay.deployed();
+
+    return directPay.pay.call(
+        accounts[1],
+        web3.eth.getBalance(directPay.address).plus(1),
+        { from: accounts[0] })
+      .then(function (success) {
+        assert.isFalse(success, "should not accept to send more than has");
+      })
   });
 
 });
