@@ -98,10 +98,18 @@ contract('DirectPay', function(accounts) {
                 });
         });
 
+        it("should not be possible to deploy NoValuePlease with value", function() {
+
+            return Extensions.expectedExceptionPromise(function() {
+                    return NoValuePlease.new({ from: owner, value: 1, gas: 3000000 })
+                }, 3000000);
+            
+        });
+
         it("should not be possible to send 1 ether to NoValuePlease", function() {
             var noValuePlease;
 
-            return NoValuePlease.new()
+            return NoValuePlease.new({ from: owner })
                 .then(function(created) {
                     noValuePlease = created;
                     return directPay.pay.call(noValuePlease.address, 1, { from: owner });
