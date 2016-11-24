@@ -1,3 +1,4 @@
+ethJsUtil = require('../node_modules/ethereumjs-util/');
 Extensions = require("../utils/extensions.js");
 Extensions.init(web3, assert);
 
@@ -152,6 +153,61 @@ contract('DirectPay', function(accounts) {
                 .then(function (success) {
                     assert.isFalse(success, "should not accept to send more than has");
                 });
+        });
+
+    });
+
+    describe("Irregular actions", function() {
+
+        it("should be possible to increase balance of NoValuePlease via selfdestruct", function() {
+
+            var mortal, noValuePlease;
+
+            return Promise.all([
+                    Mortal.new({ from: owner, value: 8 }),
+                    NoValuePlease.new({ from: owner })
+                ]) 
+                .then(function(createds) {
+                    mortal = createds[0];
+                    noValuePlease = createds[1];
+                    assert.strictEqual(
+                        web3.eth.getBalance(noValuePlease.address).toNumber(),
+                        0,
+                        "should have nothing");
+                    return mortal.kill(noValuePlease.address);
+                })
+                .then(function(tx) {
+                    return web3.eth.getTransactionReceiptMined(tx);
+                })
+                .then(function(receipt) {
+                    assert.strictEqual(
+                        web3.eth.getBalance(noValuePlease.address).toNumber(),
+                        8,
+                        "should have an updated balance");
+                });
+
+        });
+
+        it("should be possible to increase balance of NoValuePlease before deployment", function() {
+            var currentNonce = web3.eth.getTransactionCount(owner);
+            var futureAddress = ethJsUtil.bufferToHex(ethJsUtil.generateAddress(
+                owner, currentNonce + 1));
+
+            return web3.eth.getTransactionReceiptMined(web3.eth.sendTransaction({
+                    from: owner,
+                    to: futureAddress,
+                    value: 17
+                }))
+                .then(function(receipt) {
+                    return NoValuePlease.new({ from: owner });
+                })
+                .then(function(noValuePlease) {
+                    assert.strictEqual(
+                        web3.eth.getBalance(noValuePlease.address).toNumber(),
+                        17,
+                        "should already have a balance");                    
+                });
+
         });
 
     });
