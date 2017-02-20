@@ -121,9 +121,9 @@ contract('DirectPay', function(accounts) {
         });
 
         it("should not be possible to deploy NoValuePlease with value", function() {
-            return Extensions.expectedExceptionPromise(() => {
-                    return NoValuePlease.new({ from: owner, value: 1, gas: 3000000 })
-                }, 3000000);
+            return Extensions.expectedExceptionPromise(
+                () => NoValuePlease.new({ from: owner, value: 1, gas: 3000000 }),
+                3000000);
         });
 
         it("should not be possible to send 1 ether to NoValuePlease", function() {

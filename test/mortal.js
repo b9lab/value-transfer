@@ -1,11 +1,9 @@
 Extensions = require("../utils/extensions.js");
 Extensions.init(web3, assert);
 
-contract('DirectPay', function(accounts) {
+contract('Mortal', function(accounts) {
 
     var owner, recipient;
-    var directPay;
-    var right;
 
     before("should prepare accounts", function () {
         assert.isAbove(accounts.length, 2, "should have at least 2 accounts");
@@ -58,7 +56,6 @@ contract('DirectPay', function(accounts) {
             })
             .then(balance => {
                 assert.strictEqual(balance.toNumber(), 2, "should not have been emptied");
-                return mortal.kill(owner, { from: owner });
             });
     });
 
