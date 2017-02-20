@@ -1,18 +1,74 @@
 module.exports = {
     init: function (web3, assert) {
+        // Pipes values from a Web3 callback.
+        var callbackToResolve = function (resolve, reject) {
+            return function (error, value) {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(value);
+                    }
+                };
+        };
+
+        // List synchronous functions masquerading as values.
+        var syncGetters = {
+            db: [],
+            eth: [ "accounts", "blockNumber", "coinbase", "gasPrice", "hashrate",
+                "mining", "protocolVersion", "syncing" ],
+            net: [ "listening", "peerCount" ],
+            personal: [ "listAccounts" ],
+            shh: [],
+            version: [ "ethereum", "network", "node", "whisper" ]
+        };
+
+        promisifyFunction = function(groups) {
+            var original = web3;
+            var promisified = web3;
+            var groupLength = groups.length;
+            groups.forEach(function(group, index) {
+                original = original[group];
+                if (index < groupLength - 1) {
+                    promisified = promisified[group];
+                } else {
+                    // Now we are at the last element
+                    promisified[group + "Promise"] = function () {
+                        var args = arguments;
+                        return new Promise(function promiseResolver(resolve, reject) {
+                            args[args.length] = callbackToResolve(resolve, reject);
+                            args.length++;
+                            original.apply(web3[group], args);
+                        });
+                    };        
+                }
+            });
+        };
+
+        Object.keys(syncGetters).forEach(function(group) {
+            Object.keys(web3[group]).forEach(function (method) {
+                if (syncGetters[group].indexOf(method) > -1) {
+                    // Skip
+                } else if (typeof web3[group][method] === "function") {
+                    promisifyFunction([group, method]);
+                }
+            });
+        });
+
         web3.eth.getTransactionReceiptMined = function (txnHash, interval) {
             var transactionReceiptAsync;
             interval = interval ? interval : 500;
             transactionReceiptAsync = function(txnHash, resolve, reject) {
                 try {
-                    var receipt = web3.eth.getTransactionReceipt(txnHash);
-                    if (receipt == null) {
-                        setTimeout(function () {
-                            transactionReceiptAsync(txnHash, resolve, reject);
-                        }, interval);
-                    } else {
-                        resolve(receipt);
-                    }
+                    web3.eth.getTransactionReceiptPromise(txnHash)
+                        .then(function (receipt) {
+                            if (receipt == null) {
+                                setTimeout(function () {
+                                    transactionReceiptAsync(txnHash, resolve, reject);
+                                }, interval);
+                            } else {
+                                resolve(receipt);
+                            }
+                        });
                 } catch(e) {
                     reject(e);
                 }

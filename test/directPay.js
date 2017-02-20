@@ -4,7 +4,7 @@ Extensions.init(web3, assert);
 
 contract('DirectPay', function(accounts) {
 
-    var isTestRPC = web3.version.node.indexOf("EthereumJS TestRPC") > -1;
+    var isTestRPC;
     var owner, recipient;
     var directPay;
     var right;
@@ -13,44 +13,58 @@ contract('DirectPay', function(accounts) {
         assert.isAbove(accounts.length, 2, "should have at least 2 accounts");
         owner = accounts[0];
         recipient = accounts[1];
-        return Extensions.makeSureAreUnlocked([ owner ]);
+        return Extensions.makeSureAreUnlocked([ owner ])
+            .then(web3.version.getNodePromise())
+            .then(node => {
+                isTestRPC = node.indexOf("EthereumJS TestRPC") > -1;
+            });
     });
 
     describe("Regular actions", function() {
 
         beforeEach("should deploy a DirectPay", function() {
-            return DirectPay.new({ from: owner, value: web3.toWei(10) })
-                .then(function(created) {
+            return DirectPay.new({ from: owner, value: web3.toWei(5) })
+                .then(created => {
                     directPay = created;
+                    return web3.eth.getBalancePromise(directPay.address);
+                })
+                .then(balance => {
                     assert.strictEqual(
-                        web3.eth.getBalance(directPay.address).toString(10),
-                        web3.toWei(10).toString(10),
-                        "should start with 10 Ether");
+                        balance.toString(10),
+                        web3.toWei(5).toString(10),
+                        "should start with 5 Ether");
                     return directPay.calls();
                 })
-                .then(function (calls) {
+                .then(calls => {
                     assert.strictEqual(calls.toNumber(), 0, "should start with 0 calls");
                 });
         });
 
         it("should be possible to send 1 ether", function() {
-            var account1Balance = web3.eth.getBalance(accounts[1]);
+            var account1Balance;
 
-            return  directPay.pay.call(recipient, web3.toWei(1), { from: owner })
-                .then(function (success) {
+            return web3.eth.getBalancePromise(recipient)
+                .then(balance => {
+                    account1Balance = balance;
+                    return directPay.pay.call(recipient, web3.toWei(1), { from: owner });
+                })
+                .then(success => {
                     assert.isTrue(success, "should be possible to send 1 ether");
                     return directPay.pay(recipient, web3.toWei(1), { from: owner, gas: 3000000 });
                 })
-                .then(function (tx) {
-                    return web3.eth.getTransactionReceiptMined(tx);
-                })
-                .then(function (receipt) {
+                .then(web3.eth.getTransactionReceiptMined)
+                .then(receipt => {
                     assert.isBelow(receipt.gasUsed, 3000000, "should not use all gas");
+                    return web3.eth.getBalancePromise(directPay.address);
+                })
+                .then(balance => {
                     assert.strictEqual(
-                        web3.eth.getBalance(directPay.address).toString(10),
-                        web3.toWei(9).toString(10),
-                        "should be down to 9 Ether");
-                    var newAccout1Balance = web3.eth.getBalance(recipient);
+                        balance.toString(10),
+                        web3.toWei(4).toString(10),
+                        "should be down to 4 Ether");
+                    return web3.eth.getBalancePromise(recipient);
+                })
+                .then(newAccout1Balance => {
                     if (isTestRPC) {
                         console.log("SKIPPED asserts that fail in TestRPC");
                     } else {
@@ -61,29 +75,36 @@ contract('DirectPay', function(accounts) {
                     }
                     return directPay.calls();
                 })
-                .then(function (calls) {
+                .then(calls => {
                     assert.strictEqual(calls.toNumber(), 1, "should have had a single call");
                 });
         });
 
         it("should be possible to send 0 ether", function() {
-            var account1Balance = web3.eth.getBalance(recipient);
+            var account1Balance;
 
-            return directPay.pay.call(recipient, 0, { from: owner })
-                .then(function (success) {
+            return web3.eth.getBalancePromise(recipient)
+                .then(balance => {
+                    account1Balance = balance;
+                    return directPay.pay.call(recipient, 0, { from: owner });
+                })
+                .then(success => {
                     assert.isTrue(success, "should be possible to send 0 ether");
                     return directPay.pay(recipient, 0, { from: owner, gas: 3000000 });
                 })
-                .then(function (tx) {
-                    return web3.eth.getTransactionReceiptMined(tx);
-                })
-                .then(function (receipt) {
+                .then(web3.eth.getTransactionReceiptMined)
+                .then(receipt => {
                     assert.isBelow(receipt.gasUsed, 3000000, "should not use all gas");
+                    return web3.eth.getBalancePromise(directPay.address);
+                })
+                .then(balance => {
                     assert.strictEqual(
-                        web3.eth.getBalance(directPay.address).toString(10),
-                        web3.toWei(10).toString(10),
-                        "should still be at 10 Ethers");
-                    var newAccout1Balance = web3.eth.getBalance(recipient);
+                        balance.toString(10),
+                        web3.toWei(5).toString(10),
+                        "should still be at 5 Ethers");
+                    return web3.eth.getBalancePromise(recipient);
+                })
+                .then(newAccout1Balance => {
                     if (isTestRPC) {
                         console.log("SKIPPED asserts that fail in TestRPC");
                     } else {
@@ -94,41 +115,42 @@ contract('DirectPay', function(accounts) {
                     }
                     return directPay.calls();
                 })
-                .then(function (calls) {
+                .then(calls => {
                     assert.strictEqual(calls.toNumber(), 1, "should have had a single call");
                 });
         });
 
         it("should not be possible to deploy NoValuePlease with value", function() {
-
-            return Extensions.expectedExceptionPromise(function() {
+            return Extensions.expectedExceptionPromise(() => {
                     return NoValuePlease.new({ from: owner, value: 1, gas: 3000000 })
                 }, 3000000);
-            
         });
 
         it("should not be possible to send 1 ether to NoValuePlease", function() {
             var noValuePlease;
 
             return NoValuePlease.new({ from: owner })
-                .then(function(created) {
+                .then(created => {
                     noValuePlease = created;
                     return directPay.pay.call(noValuePlease.address, 1, { from: owner });
                 })
-                .then(function (success) {
+                .then(success => {
                     assert.isFalse(success, "should not be possible to send 1 ether");
                     return directPay.pay(noValuePlease.address, 1, { from: owner, gas: 3000000 });
                 })
-                .then(function (tx) {
-                    return web3.eth.getTransactionReceiptMined(tx);
-                })
-                .then(function (receipt) {
+                .then(web3.eth.getTransactionReceiptMined)
+                .then(receipt => {
                     assert.isBelow(receipt.gasUsed, 3000000, "should not use all gas");
+                    return web3.eth.getBalancePromise(directPay.address);
+                })
+                .then(balance => {
                     assert.strictEqual(
-                        web3.eth.getBalance(directPay.address).toString(10),
-                        web3.toWei(10).toString(10),
-                        "should still be at 10 Ether");
-                    var noValueBalance = web3.eth.getBalance(noValuePlease.address);
+                        balance.toString(10),
+                        web3.toWei(5).toString(10),
+                        "should still be at 5 Ether");
+                    return web3.eth.getBalancePromise(noValuePlease.address);
+                })
+                .then(noValueBalance => {
                     if (isTestRPC) {
                         console.log("SKIPPED asserts that fail in TestRPC");
                     } else {
@@ -139,18 +161,20 @@ contract('DirectPay', function(accounts) {
                     }
                     return directPay.calls();
                 })
-                .then(function (calls) {
+                .then(calls => {
                     assert.strictEqual(calls.toNumber(), 1, "should have had a single call");
                 });
         });
 
         it("should not be possible to send more than what it has", function () {
-
-            return directPay.pay.call(
-                    recipient,
-                    web3.eth.getBalance(directPay.address).plus(1),
-                    { from: owner })
-                .then(function (success) {
+            return web3.eth.getBalancePromise(directPay.address)
+                .then(balance => {
+                    return directPay.pay.call(
+                        recipient,
+                        balance.plus(1),
+                        { from: owner });
+                })
+                .then(success => {
                     assert.isFalse(success, "should not accept to send more than has");
                 });
         });
@@ -160,54 +184,55 @@ contract('DirectPay', function(accounts) {
     describe("Irregular actions", function() {
 
         it("should be possible to increase balance of NoValuePlease via selfdestruct", function() {
-
             var mortal, noValuePlease;
 
             return Promise.all([
                     Mortal.new({ from: owner, value: 8 }),
                     NoValuePlease.new({ from: owner })
                 ]) 
-                .then(function(createds) {
+                .then(createds => {
                     mortal = createds[0];
                     noValuePlease = createds[1];
-                    assert.strictEqual(
-                        web3.eth.getBalance(noValuePlease.address).toNumber(),
-                        0,
-                        "should have nothing");
+                    return web3.eth.getBalancePromise(noValuePlease.address);
+                })
+                .then(balance => {
+                    assert.strictEqual(balance.toNumber(), 0, "should have nothing");
                     return mortal.kill(noValuePlease.address);
                 })
-                .then(function(tx) {
-                    return web3.eth.getTransactionReceiptMined(tx);
+                .then(web3.eth.getTransactionReceiptMined)
+                .then(receipt => {
+                    return web3.eth.getBalancePromise(noValuePlease.address);
                 })
-                .then(function(receipt) {
+                .then(balance => {
                     assert.strictEqual(
-                        web3.eth.getBalance(noValuePlease.address).toNumber(),
-                        8,
-                        "should have an updated balance");
+                        balance.toNumber(), 8, "should have an updated balance");
                 });
-
         });
 
         it("should be possible to increase balance of NoValuePlease before deployment", function() {
-            var currentNonce = web3.eth.getTransactionCount(owner);
-            var futureAddress = ethJsUtil.bufferToHex(ethJsUtil.generateAddress(
-                owner, currentNonce + 1));
+            var futureAddress;
 
-            return web3.eth.getTransactionReceiptMined(web3.eth.sendTransaction({
-                    from: owner,
-                    to: futureAddress,
-                    value: 17
-                }))
-                .then(function(receipt) {
+            return web3.eth.getTransactionCountPromise(owner)
+                .then(currentNonce => {
+                    futureAddress = ethJsUtil.bufferToHex(ethJsUtil.generateAddress(
+                        owner, currentNonce + 1));
+                    return web3.eth.sendTransactionPromise({
+                            from: owner,
+                            to: futureAddress,
+                            value: 17
+                        });
+                })
+                .then(web3.eth.getTransactionReceiptMined)
+                .then(receipt => {
                     return NoValuePlease.new({ from: owner });
                 })
-                .then(function(noValuePlease) {
+                .then(noValuePlease => {
+                    return web3.eth.getBalancePromise(noValuePlease.address);
+                })
+                .then(balance => {
                     assert.strictEqual(
-                        web3.eth.getBalance(noValuePlease.address).toNumber(),
-                        17,
-                        "should already have a balance");                    
+                        balance.toNumber(), 17, "should already have a balance");                    
                 });
-
         });
 
     });
