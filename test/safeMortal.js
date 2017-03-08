@@ -1,7 +1,9 @@
+var SafeMortal = artifacts.require("./SafeMortal.sol");
+
 Extensions = require("../utils/extensions.js");
 Extensions.init(web3, assert);
 
-contract('Mortal', function(accounts) {
+contract('SafeMortal', function(accounts) {
 
     var owner, recipient;
 
@@ -25,9 +27,7 @@ contract('Mortal', function(accounts) {
                     assert.strictEqual(fetchedOwner, owner, "should have saved owner");
                     return safeMortal.killed();
                 })
-                .then(killed => {
-                    assert.isFalse(killed, "should not be killed yet");
-                });
+                .then(killed => assert.isFalse(killed, "should not be killed yet"));
         });
 
         it("should be possible to send to safeMortal", function() {
@@ -38,21 +38,16 @@ contract('Mortal', function(accounts) {
                     gas: 3000000
                 })
                 .then(web3.eth.getTransactionReceiptMined)
-                .then(receipt => {
-                    assert.isBelow(receipt.gasUsed, 3000000, "should not have used all gas");
-                });
+                .then(receipt => assert.isBelow(receipt.gasUsed, 3000000, "should not have used all gas"));
         });
 
         it("should be possible to kill safeMortal", function() {
             return safeMortal.kill({ from: owner, gas: 3000000 })
-                .then(web3.eth.getTransactionReceiptMined)
-                .then(receipt => {
-                    assert.isBelow(receipt.gasUsed, 3000000, "should not have used all");
+                .then(txObject => {
+                    assert.isBelow(txObject.receipt.gasUsed, 3000000, "should not have used all");
                     return safeMortal.killed();
                 })
-                .then(killed => {
-                    assert.isTrue(killed, "should have been marked as killed");
-                });
+                .then(killed => assert.isTrue(killed, "should have been marked as killed"));
         });
 
         it("should not be possible to kill if not owner", function() {
@@ -69,9 +64,7 @@ contract('Mortal', function(accounts) {
                 })
                 .then(web3.eth.getTransactionReceiptMined)
                 .then(receipt => web3.eth.getBalancePromise(safeMortal.address))
-                .then(balance => {
-                    assert.strictEqual(balance.toNumber(), 1, "should have received");
-                });
+                .then(balance => assert.strictEqual(balance.toNumber(), 1, "should have received"));
         });
 
     });
@@ -91,21 +84,16 @@ contract('Mortal', function(accounts) {
                 })
                 .then(web3.eth.getTransactionReceiptMined)
                 .then(receipt => web3.eth.getBalancePromise(safeMortal.address))
-                .then(balance => {
-                    assert.strictEqual(balance.toNumber(), 2, "should have received wei");
-                });
+                .then(balance => assert.strictEqual(balance.toNumber(), 2, "should have received wei"));
         });
 
         it("should be possible to empty on kill", function() {
             return safeMortal.kill({ from: owner, gas: 3000000 })
-                .then(web3.eth.getTransactionReceiptMined)
-                .then(receipt => {
-                    assert.isBelow(receipt.gasUsed, 3000000, "should have gone through");
+                .then(txObject => {
+                    assert.isBelow(txObject.receipt.gasUsed, 3000000, "should have gone through");
                     return web3.eth.getBalancePromise(safeMortal.address);
                 })
-                .then(balance => {
-                    assert.strictEqual(balance.toNumber(), 0, "should have returned all");
-                });
+                .then(balance => assert.strictEqual(balance.toNumber(), 0, "should have returned all"));
         });
     });
 
@@ -118,11 +106,8 @@ contract('Mortal', function(accounts) {
                     safeMortal = created;
                     return safeMortal.kill({ from: owner });
                 })
-                .then(web3.eth.getTransactionReceiptMined)
-                .then(receipt => safeMortal.killed())
-                .then(killed => {
-                    assert.isTrue(killed, "should have been killed");
-                });
+                .then(txObject => safeMortal.killed())
+                .then(killed => assert.isTrue(killed, "should have been killed"));
         });
 
         it("should not be possible to call kill again", function() {

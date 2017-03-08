@@ -1,3 +1,6 @@
+var Mortal = artifacts.require("./Mortal.sol");
+var CanReceiveMortal = artifacts.require("./CanReceiveMortal.sol");
+
 Extensions = require("../utils/extensions.js");
 Extensions.init(web3, assert);
 
@@ -24,13 +27,8 @@ contract('Mortal', function(accounts) {
                 });
             })
             .then(web3.eth.getTransactionReceiptMined)
-            .then(receipt => {
-                return mortal.kill(owner, { from: owner });
-            })
-            .then(web3.eth.getTransactionReceiptMined)
-            .then(receipt => {
-                return web3.eth.getBalancePromise(mortal.address);
-            })
+            .then(receipt => mortal.kill(owner, { from: owner }))
+            .then(txObject => web3.eth.getBalancePromise(mortal.address))
             .then(balance => {
                 assert.strictEqual(balance.toNumber(), 0, "should be empty");
                 return web3.eth.sendTransactionPromise({
@@ -49,14 +47,11 @@ contract('Mortal', function(accounts) {
                 assert.strictEqual(balance.toNumber(), 2, "should have received");
                 return mortal.kill(owner, { from: owner });
             })
-            .then(web3.eth.getTransactionReceiptMined)
-            .then(receipt => {
-                assert.isBelow(receipt.gasUsed, 3000000, "should not have used all gas");
+            .then(txObject => {
+                assert.isBelow(txObject.receipt.gasUsed, 3000000, "should not have used all gas");
                 return web3.eth.getBalancePromise(mortal.address);
             })
-            .then(balance => {
-                assert.strictEqual(balance.toNumber(), 2, "should not have been emptied");
-            });
+            .then(balance => assert.strictEqual(balance.toNumber(), 2, "should not have been emptied"));
     });
 
 });
